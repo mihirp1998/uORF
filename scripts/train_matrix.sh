@@ -125,8 +125,9 @@ python -m visdom.server -p $PORT  &>/dev/null &
 #     --model 'uorf_nogan' \
 
 
-DATAROOT=../uorf_data_gen/room_diverse/datasets/custom_renders_bkg3_789_tests//
 # DATAROOT=../uorf_data_gen/room_diverse/datasets/custom_renders_bkg3_789_tests//
+# DATAROOT=../uorf_data_gen/room_diverse/datasets/custom_renders_bkg3_789_tests//
+
 
 
 # python train_without_gan.py --dataroot $DATAROOT --n_scenes 17999 --n_img_each_scene 4  \

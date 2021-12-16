@@ -83,6 +83,8 @@ if __name__ == '__main__':
                         
                         if losses['recon'] <= min(all_recon_losses):
                             probable_best_ari = losses['ari']
+                            probable_best_ari_mask = model.render_mask0
+                            probable_best_rgb = model.x_rec0                            
 
                         if (((custom_iters+1) % opt.change_idx_after) == 0):
 
@@ -93,6 +95,21 @@ if __name__ == '__main__':
                             image_numpy = util.tensor2im(best_rgb)
                             img_path = os.path.join(visualizer.img_dir, 'epoch%.3d_%s.png' % (custom_iters, "best_rgb"))
                             util.save_image(image_numpy, img_path)
+
+                            image_numpy = util.tensor2im(probable_best_ari_mask)
+                            img_path = os.path.join(visualizer.img_dir, 'epoch%.3d_%s.png' % (custom_iters, "probable_best_mask"))
+                            util.save_image(image_numpy, img_path)
+
+                            image_numpy = util.tensor2im(probable_best_rgb)
+                            img_path = os.path.join(visualizer.img_dir, 'epoch%.3d_%s.png' % (custom_iters, "probable_best_rgb"))
+                            util.save_image(image_numpy, img_path)
+
+                            # st()
+                            if opt.continue_train:
+                                load_suffix = 'iter_{}'.format(opt.load_iter) if opt.load_iter > 0 else opt.epoch
+                                # st()
+                                model.load_networks(load_suffix)
+
                             
                             # st()
                             # print("ended")

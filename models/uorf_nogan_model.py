@@ -215,6 +215,7 @@ class uorfNoGanModel(BaseModel):
     def forward(self, epoch=0):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
         if not self.opt.no_mask:
+            # st()
             self.weight_percept = 0.0
         else:
             self.weight_percept = self.opt.weight_percept if epoch >= self.opt.percept_in else 0
