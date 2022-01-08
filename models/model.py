@@ -67,7 +67,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, n_freq=5, input_dim=33+64, z_dim=64, n_layers=3, locality=True, locality_ratio=4/7, fixed_locality=False):
+    def __init__(self, n_freq=5, input_dim=33+64, z_dim=64, n_layers=3, locality=True, locality_ratio=4/7, fixed_locality=False, scale_gradients = False):
         """
         freq: raised frequency
         input_dim: pos emb dim + slot dim
@@ -83,6 +83,8 @@ class Decoder(nn.Module):
         self.locality_ratio = locality_ratio
         self.fixed_locality = fixed_locality
         self.out_ch = 4
+        self.scale_gradients = scale_gradients
+
         before_skip = [nn.Linear(input_dim, z_dim), nn.ReLU(True)]
         after_skip = [nn.Linear(z_dim+input_dim, z_dim), nn.ReLU(True)]
         for i in range(n_layers-1):
@@ -161,6 +163,10 @@ class Decoder(nn.Module):
 
         unmasked_raws = torch.cat([raw_rgb, raw_sigma], dim=2)  # KxPx4
         masked_raws = unmasked_raws * masks
+
+        if self.scale_gradients:
+            masked_raws[1:].register_hook(lambda grad: grad * 10.0)     
+
         raws = masked_raws.sum(dim=0)
 
         return raws, masked_raws, unmasked_raws, masks
@@ -363,7 +369,8 @@ class SlotAttention(nn.Module):
             slot_fg = slot_fg + self.to_res(slot_fg)
 
         slots = torch.cat([slot_bg, slot_fg], dim=1)
-        return slots, attn
+        attn_norm = torch.cat([attn_weights_bg,attn_weights_fg],dim=1)        
+        return slots, attn ,attn_norm
 
 
 

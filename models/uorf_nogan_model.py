@@ -59,7 +59,8 @@ class uorfNoGanModel(BaseModel):
         parser.add_argument('--freeze_decoder', action='store_true', help='operate on masked inputs')        
         parser.add_argument('--fixed_locality', action='store_true', help='enforce locality in world space instead of transformed view space')
         parser.add_argument('--train_autoencode', action='store_true', help='enforce locality in world space instead of transformed view space')
-
+        parser.add_argument('--scale_gradients',action='store_true')
+        parser.add_argument('--convex_loss',action='store_true')
         parser.set_defaults(batch_size=1, lr=3e-4, niter_decay=0,
                             dataset_mode='multiscenes', niter=1200, custom_lr=True, lr_policy='warmup')
 
@@ -129,7 +130,7 @@ class uorfNoGanModel(BaseModel):
                                                         locality_ratio=opt.obj_scale/opt.nss_scale, fixed_locality=opt.fixed_locality), gpu_ids=self.gpu_ids, init_type='xavier')            
         else:            
             self.netDecoder = networks.init_net(Decoder(n_freq=opt.n_freq, input_dim=6*opt.n_freq+3+z_dim, z_dim=opt.z_dim, n_layers=opt.n_layer,
-                                                        locality_ratio=opt.obj_scale/opt.nss_scale, fixed_locality=opt.fixed_locality), gpu_ids=self.gpu_ids, init_type='xavier')
+                                                        locality_ratio=opt.obj_scale/opt.nss_scale, fixed_locality=opt.fixed_locality,scale_gradients= self.opt.scale_gradients), gpu_ids=self.gpu_ids, init_type='xavier')
         # st()
         if opt.freeze_decoder:
             self.netDecoder.eval()
@@ -229,7 +230,23 @@ class uorfNoGanModel(BaseModel):
         feat = feature_map.flatten(start_dim=2).permute([0, 2, 1])  # BxNxC
 
         # Slot Attention
-        z_slots, attn = self.netSlotAttention(feat)  # 1xKxC, 1xKxN
+        z_slots, attn, attn_norm = self.netSlotAttention(feat)  # 1xKxC, 1xKxN
+
+
+        if self.opt.convex_loss:
+            grid_val = utils_basic.build_grid2D([64,64]).repeat(1,1,1,1).reshape([1,-1,2])
+            slot_means = torch.matmul(attn_norm,grid_val)
+            slot_means_ = slot_means.unsqueeze(2)
+            grid_val_ = grid_val.unsqueeze(1) 
+            slot_variances_ = ((slot_means_ - grid_val_)**2).sum(-1)
+            slot_variances_ = slot_variances_ * attn
+            slot_variances = slot_variances_.sum(-1)
+
+            # st()
+            slot_mean_loss = utils_basic.slot_distinctiveness_2(slot_means).mean() 
+            variance_loss = utils_basic.variance_loss(slot_variances[:,0]/slot_variances[:,1:].mean(1)).mean() 
+            slot_distinct_loss = slot_mean_loss * 0.00  + variance_loss *0.006
+
         z_slots, attn = z_slots.squeeze(0), attn.squeeze(0)  # KxC, KxN
         K = attn.shape[0]
 
@@ -298,6 +315,9 @@ class uorfNoGanModel(BaseModel):
             else:
                 self.loss_recon = self.L2_loss(x_recon, x)
 
+        if self.opt.convex_loss:
+            self.loss_recon += slot_distinct_loss
+        
         x_norm, rendered_norm = self.vgg_norm((x + 1) / 2), self.vgg_norm(rendered)
         rendered_feat, x_feat = self.perceptual_net(rendered_norm), self.perceptual_net(x_norm)
         self.loss_perc = self.weight_percept * self.L2_loss(rendered_feat, x_feat)
